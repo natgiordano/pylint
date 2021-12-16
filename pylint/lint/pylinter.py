@@ -1504,6 +1504,94 @@ class PyLinter(
             )
         )
 
+    def remove_one_message(
+        self,
+        message_definition: MessageDefinition,
+        line: Optional[int],
+        node: Optional[nodes.NodeNG],
+        args: Optional[Any],
+        confidence: Optional[interfaces.Confidence],
+        col_offset: Optional[int],
+        end_lineno: Optional[int],
+        end_col_offset: Optional[int],
+    ) -> None:
+        """After various checks have passed a single Message is
+        passed to the reporter and added to stats"""
+        message_definition.check_message_definition(line, node)
+
+        # Look up "location" data of node if not yet supplied
+        if node:
+            if not line:
+                line = node.fromlineno
+            # pylint: disable=fixme
+            # TODO: Initialize col_offset on every node (can be None) -> astroid
+            if not col_offset and hasattr(node, "col_offset"):
+                col_offset = node.col_offset
+            # pylint: disable=fixme
+            # TODO: Initialize end_lineno on every node (can be None) -> astroid
+            # See https://github.com/PyCQA/astroid/issues/1273
+            if not end_lineno and hasattr(node, "end_lineno"):
+                end_lineno = node.end_lineno
+            # pylint: disable=fixme
+            # TODO: Initialize end_col_offset on every node (can be None) -> astroid
+            if not end_col_offset and hasattr(node, "end_col_offset"):
+                end_col_offset = node.end_col_offset
+
+        # should this message be displayed
+        if not self.is_message_enabled(message_definition.msgid, line, confidence):
+            self.file_state.handle_ignored_message(
+                self._get_message_state_scope(
+                    message_definition.msgid, line, confidence
+                ),
+                message_definition.msgid,
+                line,
+            )
+            return
+
+        # update stats
+        msg_cat = MSG_TYPES[message_definition.msgid[0]]
+        self.msg_status |= MSG_TYPES_STATUS[message_definition.msgid[0]]
+        self.stats.increase_single_message_count(msg_cat, 1)
+        self.stats.increase_single_module_message_count(self.current_name, msg_cat, 1)
+        try:
+            self.stats.by_msg[message_definition.symbol] += 1
+        except KeyError:
+            self.stats.by_msg[message_definition.symbol] = 1
+        # Interpolate arguments into message string
+        msg = message_definition.msg
+        if args:
+            msg %= args
+        # get module and object
+        if node is None:
+            module, obj = self.current_name, ""
+            abspath = self.current_file
+        else:
+            module, obj = utils.get_module_and_frameid(node)
+            abspath = node.root().file
+        if abspath is not None:
+            path = abspath.replace(self.reporter.path_strip_prefix, "", 1)
+        else:
+            path = "configuration"
+        # add the message
+        self.reporter.remove_message(
+            Message(
+                message_definition.msgid,
+                message_definition.symbol,
+                MessageLocationTuple(
+                    abspath,
+                    path,
+                    module or "",
+                    obj,
+                    line or 1,
+                    col_offset or 0,
+                    end_lineno,
+                    end_col_offset,
+                ),
+                msg,
+                confidence,
+            )
+        )
+
     def add_message(
         self,
         msgid: str,
@@ -1528,6 +1616,40 @@ class PyLinter(
         message_definitions = self.msgs_store.get_message_definitions(msgid)
         for message_definition in message_definitions:
             self._add_one_message(
+                message_definition,
+                line,
+                node,
+                args,
+                confidence,
+                col_offset,
+                end_lineno,
+                end_col_offset,
+            )
+
+    def remove_message(
+        self,
+        msgid: str,
+        line: Optional[int] = None,
+        node: Optional[nodes.NodeNG] = None,
+        args: Optional[Any] = None,
+        confidence: Optional[interfaces.Confidence] = None,
+        col_offset: Optional[int] = None,
+        end_lineno: Optional[int] = None,
+        end_col_offset: Optional[int] = None,
+    ) -> None:
+        """Adds a message given by ID or name.
+
+        If provided, the message string is expanded using args.
+
+        AST checkers must provide the node argument (but may optionally
+        provide line if the line number is different), raw and token checkers
+        must provide the line argument.
+        """
+        if confidence is None:
+            confidence = interfaces.UNDEFINED
+        message_definitions = self.msgs_store.get_message_definitions(msgid)
+        for message_definition in message_definitions:
+            self._remove_one_message(
                 message_definition,
                 line,
                 node,

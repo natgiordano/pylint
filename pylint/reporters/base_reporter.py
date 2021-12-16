@@ -38,6 +38,9 @@ class BaseReporter:
         """Handle a new message triggered on the current file."""
         self.messages.append(msg)
 
+    def remove_message(self, msg: Message) -> None: 
+        self.messages.remove(msg)
+
     def set_output(self, output: Optional[TextIO] = None) -> None:
         """set output stream"""
         # pylint: disable-next=fixme

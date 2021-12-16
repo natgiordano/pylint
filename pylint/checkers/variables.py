@@ -1990,6 +1990,16 @@ class VariablesChecker(BaseChecker):
         # Care about functions with unknown argument (builtins)
         if name in argnames:
             self._check_unused_arguments(name, node, stmt, argnames)
+            if name in nonlocal_names:
+                is_method = node.is_method()
+                klass = node.parent.frame()
+                if is_method and isinstance(klass, nodes.ClassDef):
+                    confidence = (
+                        INFERENCE if utils.has_known_bases(klass) else INFERENCE_FAILURE
+                    )
+                else:
+                    confidence = HIGH
+                self.remove_message("unused-argument", args=name, node=stmt, confidence=confidence)
         else:
             if stmt.parent and isinstance(stmt.parent, (nodes.Assign, nodes.AnnAssign)):
                 if name in nonlocal_names:

@@ -124,6 +124,21 @@ class BaseChecker(OptionsProviderMixIn):
             msgid, line, node, args, confidence, col_offset, end_lineno, end_col_offset
         )
 
+    def remove_message(
+        self,
+        msgid: str,
+        line: Optional[int] = None,
+        node: Optional[nodes.NodeNG] = None,
+        args: Any = None,
+        confidence: Optional[Confidence] = None,
+        col_offset: Optional[int] = None,
+        end_lineno: Optional[int] = None,
+        end_col_offset: Optional[int] = None,
+    ) -> None:
+        self.linter.remove_message(
+            msgid, line, node, args, confidence, col_offset, end_lineno, end_col_offset
+    )
+
     def check_consistency(self):
         """Check the consistency of msgid.
 
